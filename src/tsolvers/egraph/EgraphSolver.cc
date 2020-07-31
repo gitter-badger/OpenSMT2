@@ -78,9 +78,10 @@ The algorithm and data structures are inspired by the following paper:
 
 static SolverDescr descr_uf_solver("UF Solver", "Solver for Quantifier Free Theory of Uninterpreted Functions with Equalities");
 
-const char* Egraph::s_val_prefix = "u";
+// @ reserved for "solver-defined abstract values".  We use these for elements of the universe.
+const char* Egraph::s_val_prefix = "@u";
 const char* Egraph::s_const_prefix = "n";
-const char* Egraph::s_any_prefix = "a";
+const char* Egraph::s_any_prefix = "@a";
 const char* Egraph::s_val_true = "true";
 const char* Egraph::s_val_false = "false";
 
@@ -94,6 +95,8 @@ Egraph::Egraph(SMTConfig & c, Logic& l)
 #endif
       , ERef_Nil           ( enode_store.get_Nil() )
       , fa_garbage_frac    ( 0.5 )
+      , values_ok          ( false )
+      , n_model_clears     ( 0 )
       , active_dup1        ( false )
       , dup_count1         ( 0 )
       , congruence_running ( false )
@@ -239,23 +242,109 @@ void Egraph::getConflict( bool deduction, vec<PtAsgn>& cnfl )
 
 void Egraph::clearModel()
 {
-    values.clear();
+    uelemPTRefsForValues.clear();
     values_ok = false;
+    ++ n_model_clears;
 }
 
 void Egraph::computeModel( )
 {
-    if (values_ok == true)
+    if (values_ok) {
         return;
+    }
 
-    const vec<ERef>& enodes = enode_store.getTermEnodes();
-    for (int i = 0; i < enodes.size(); i++) {
-        if (values.has(enodes[i]))
+    // Store the canonical values
+    Map<ERef,ERef,ERefHash> canonERefsForValues;
+
+    for (ERef er : enode_store.getTermEnodes()) {
+        const Enode &e = enode_store[er];
+        ERef root_r = e.getRoot();
+        const Enode &r = enode_store[root_r];
+        if (canonERefsForValues.has(er))
             continue;
-        ERef root_r = enode_store[enodes[i]].getRoot();
-        values.insert(enodes[i], root_r);
+        canonERefsForValues.insert(er, root_r);
+    }
+    for (ERef er : enode_store.getTermEnodes()) {
+        getOrCreateUElemFromPTRef(enode_store[er].getTerm(), canonERefsForValues);
     }
     values_ok = true;
+}
+
+struct UFValNode {
+    Map<ERef,UFValNode*,ERefHash> children;
+};
+
+PTRef Egraph::getOrCreateUElemFromPTRef(PTRef tr, const Map<ERef,ERef,ERefHash> &canonERefsForValues) {
+    PTRef uel_tr = PTRef_Undef;
+
+    if (uelemPTRefsForValues.has(tr)) {
+        return uelemPTRefsForValues[tr];
+    } else if (logic.isConstant(tr)) {
+        uelemPTRefsForValues.insert(tr, tr);
+        uel_tr = tr;
+    } else {
+        assert(enode_store.has(tr));
+        ERef er = enode_store.termToERef[tr];
+        stringstream ss;
+        assert(canonERefsForValues.has(er));
+        ERef er_canon = canonERefsForValues[er];
+        ss << s_val_prefix << "!" << enode_store[er_canon].getId() << "!" << n_model_clears;
+
+        char *name = strdup(ss.str().c_str());
+//        if (logic.hasSym(name)) {
+//            throw OsmtInternalException();
+//        }
+        uel_tr = logic.mkVar(logic.getSortRef(tr), name);
+        free(name);
+    }
+
+    uelemPTRefsForValues.insert(tr, uel_tr);
+    return uel_tr;
+}
+
+// The value method
+ValPair
+Egraph::getValue(PTRef tr)
+{
+    if (!values_ok) {
+        assert(false);
+        return ValPair_Undef;
+    }
+
+    if (not uelemPTRefsForValues.has(tr)) {
+        stringstream ss;
+        ss << s_any_prefix << "!" << Idx(logic.getPterm(tr).getId()) << "!" << n_model_clears;
+        PTRef uel_tr = logic.mkVar(logic.getSortRef(tr), ss.str().c_str());
+        uelemPTRefsForValues.insert(tr, uel_tr);
+    }
+
+    PTRef uelem = uelemPTRefsForValues[tr];
+
+    ValPair vp(tr, logic.pp(uelem));
+    return vp;
+}
+
+void Egraph::fillTheoryVars(ModelBuilder &modelBuilder) const {
+    assert(values_ok);
+    Map<SymRef,UFValNode*,SymRefHash> functionSymbols;
+    for (ERef er : enode_store.getTermEnodes()) {
+        const Enode &e = enode_store[er];
+        PTRef tr = e.getTerm();
+        if (logic.hasSortBool(tr)) {
+            // Should be handled by the SAT solver's model
+            continue;
+        }
+        const Pterm &t = logic.getPterm(tr);
+        if (t.size() > 0) {
+            SymRef sr = logic.getSymRef(tr);
+            std::cout << "Symbol " << logic.getSymName(tr) << " needs an ITE" << endl;
+            for (int i = 0; i < t.size(); i++) {
+                PTRef uel_tr = uelemPTRefsForValues[t[i]];
+                std::cout << "arg" << i << " = " << logic.pp(uel_tr) << " ";
+            }
+            std::cout << "-> " << logic.pp(uelemPTRefsForValues[tr]) << std::endl;
+        }
+    }
 }
 
 void Egraph::declareAtom(PTRef atom) {
@@ -1447,44 +1536,7 @@ void Egraph::extPopBacktrackPoint( )
   backtrackToStackSize( undo_stack_new_size );
 }
 
-// The value method
 
-ValPair
-Egraph::getValue(PTRef tr)
-{
-    if (!values_ok) {
-        assert(false);
-        return ValPair_Undef;
-    }
-    char* name;
-    int written = -1;
-    if (!enode_store.has(tr)) {
-        // This variable was never pushed to Egraph so its value is not
-        // bound by anything.
-        written = asprintf(&name, "%s%d", s_any_prefix, Idx(logic.getPterm(tr).getId()));
-    }
-    else {
-
-        Enode& e = enode_store[tr];
-        ERef e_root = values[e.getERef()];
-
-        if (e_root == enode_store.ERef_True)
-           written = asprintf(&name, "true");
-        else if (e_root == enode_store.ERef_False)
-            written = asprintf(&name, "false");
-        else if (isConstant(e_root)) {
-            char* const_name = logic.printTerm(enode_store[e_root].getTerm());
-            written = asprintf(&name, "%s%s", s_const_prefix, const_name);
-            free(const_name);
-        }
-        else
-            written = asprintf(&name, "%s%d", s_val_prefix, enode_store[e_root].getId());
-    }
-    assert(written >= 0); (void)written;
-    ValPair vp(tr, name);
-    free(name);
-    return vp;
-}
 
 //=================================================================================================
 // Garbage Collection methods:
