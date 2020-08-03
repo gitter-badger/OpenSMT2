@@ -40,21 +40,25 @@ class Logic {
     class TFun {
         SRef ret_sort;
         PTRef tr_body;
-        char* name;
+        char *name;
         vec<PTRef> args;
-      public:
-        TFun(const char* name_, const vec<PTRef>& args_, SRef ret_sort, PTRef tr_body)
-            : ret_sort(ret_sort)
-            , tr_body(tr_body)
-        {
-            name = (char*) malloc(strlen(name_)+1);
+    public:
+        TFun(const char *name_, const vec<PTRef> &args_, SRef ret_sort, PTRef tr_body)
+                : ret_sort(ret_sort), tr_body(tr_body) {
+            name = (char *) malloc(strlen(name_) + 1);
             strcpy(name, name_);
             args_.copyTo(args);
         }
+
         TFun() : ret_sort(SRef_Undef), tr_body(PTRef_Undef), name(NULL) {}
-        TFun(TFun& other) : ret_sort(other.ret_sort), tr_body(other.tr_body), name(other.name) { other.args.copyTo(args); }
+
+        TFun(TFun &other) : ret_sort(other.ret_sort), tr_body(other.tr_body), name(other.name) {
+            other.args.copyTo(args);
+        }
+
         ~TFun() { free(name); }
-        TFun& operator=(TFun& other) {
+
+        TFun &operator=(TFun &other) {
             if (&other != this) {
                 free(name);
                 ret_sort = other.ret_sort;
@@ -65,21 +69,14 @@ class Logic {
             }
             return *this;
         }
-        TFun& operator=(const TFun& other) {
-            if (&other != this) {
-                free(name);
-                ret_sort = other.ret_sort;
-                tr_body = other.tr_body;
-                name = (char*)malloc(strlen(other.name)+1);
-                strcpy(name, other.name);
-                other.args.copyTo(args);
-            }
-            return *this;
-        }
-        const char* getName() const { return name; }
+
+        const char *getName() const { return name; }
+
         SRef getRetSort() const { return ret_sort; }
+
         PTRef getBody() const { return tr_body; }
-        const vec<PTRef>& getArgs() const { return args; }
+
+        const vec<PTRef> &getArgs() const { return args; }
     };
   protected:
     static const char* e_argnum_mismatch;
@@ -247,7 +244,7 @@ class Logic {
 
     // Returns the default value of the given sort
     virtual PTRef getDefaultValuePTRef(const SRef sref) const;
-
+    Map<SRef,PTRef,SRefHash> defaultValueForSort;
     PTRef       mkUninterpFun (SymRef f, const vec<PTRef>& args);
     // Boolean term generation
     PTRef       mkAnd         (vec<PTRef>&);

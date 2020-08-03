@@ -80,10 +80,6 @@ static SolverDescr descr_uf_solver("UF Solver", "Solver for Quantifier Free Theo
 
 // @ reserved for "solver-defined abstract values".  We use these for elements of the universe.
 const char* Egraph::s_val_prefix = "@u";
-const char* Egraph::s_const_prefix = "n";
-const char* Egraph::s_any_prefix = "@a";
-const char* Egraph::s_val_true = "true";
-const char* Egraph::s_val_false = "false";
 
 Egraph::Egraph(SMTConfig & c, Logic& l)
       : TSolver            (descr_uf_solver, descr_uf_solver, c)
@@ -288,12 +284,11 @@ PTRef Egraph::getOrCreateUElemFromPTRef(PTRef tr, const Map<ERef,ERef,ERefHash> 
         stringstream ss;
         assert(canonERefsForValues.has(er));
         ERef er_canon = canonERefsForValues[er];
-        ss << s_val_prefix << "!" << enode_store[er_canon].getId() << "!" << n_model_clears;
+        SRef sr = getLogic().getSortRef(tr);
+        ss << s_val_prefix << "!" << enode_store[er_canon].getId() << "!" << getLogic().getSortName(sr) << "!" << n_model_clears;
 
         char *name = strdup(ss.str().c_str());
-//        if (logic.hasSym(name)) {
-//            throw OsmtInternalException();
-//        }
+
         uel_tr = logic.mkVar(logic.getSortRef(tr), name);
         free(name);
     }
@@ -302,7 +297,11 @@ PTRef Egraph::getOrCreateUElemFromPTRef(PTRef tr, const Map<ERef,ERef,ERefHash> 
     return uel_tr;
 }
 
-// The value method
+/**
+ * Deprecated.
+ * @param tr the queried term
+ * @return the queried term and string representation for its value.
+ */
 ValPair
 Egraph::getValue(PTRef tr)
 {
@@ -313,8 +312,7 @@ Egraph::getValue(PTRef tr)
 
     if (not uelemPTRefsForValues.has(tr)) {
         stringstream ss;
-        ss << s_any_prefix << "!" << Idx(logic.getPterm(tr).getId()) << "!" << n_model_clears;
-        PTRef uel_tr = logic.mkVar(logic.getSortRef(tr), ss.str().c_str());
+        PTRef uel_tr = getLogic().getDefaultValuePTRef(tr);
         uelemPTRefsForValues.insert(tr, uel_tr);
     }
 
@@ -324,7 +322,18 @@ Egraph::getValue(PTRef tr)
     return vp;
 }
 
+/**
+ * @param modelBuilder
+ */
 void Egraph::fillTheoryVars(ModelBuilder &modelBuilder) const {
+    struct TruthTableRow {
+        vec<PTRef> argvals;
+        PTRef retval;
+    };
+    vec<TruthTableRow> truthTable;
+
+    VecMap<SymRef,int,SymRefHash> symToTableRows;
+
     assert(values_ok);
     Map<SymRef,UFValNode*,SymRefHash> functionSymbols;
     for (ERef er : enode_store.getTermEnodes()) {
@@ -335,15 +344,55 @@ void Egraph::fillTheoryVars(ModelBuilder &modelBuilder) const {
             continue;
         }
         const Pterm &t = logic.getPterm(tr);
+        SymRef sr = logic.getSymRef(tr);
+        if (!symToTableRows.has(sr)) {
+            symToTableRows.insert(sr, vec<int>());
+        }
         if (t.size() > 0) {
-            SymRef sr = logic.getSymRef(tr);
-            std::cout << "Symbol " << logic.getSymName(tr) << " needs an ITE" << endl;
+            symToTableRows[sr].push(truthTable.size());
+            truthTable.push();
             for (int i = 0; i < t.size(); i++) {
                 PTRef uel_tr = uelemPTRefsForValues[t[i]];
-                std::cout << "arg" << i << " = " << logic.pp(uel_tr) << " ";
+                truthTable.last().argvals.push(uel_tr);
             }
-            std::cout << "-> " << logic.pp(uelemPTRefsForValues[tr]) << std::endl;
+            truthTable.last().retval = uelemPTRefsForValues[tr];
         }
+    }
+    for (const auto rowpair : symToTableRows.getKeysAndValsPtrs()) {
+        SymRef sr = rowpair->key;
+        const char* sym = logic.printSym(sr);
+        Symbol& s = logic.getSym(sr);
+        SRef rsort = s.rsort();
+        vec<PTRef> formal_parameters;
+        for (int i = 1; i < s.size(); i++) {
+            std::stringstream ss;
+            ss << "@param!" << i << "!" << sym << "!" << logic.getSortName(s.rsort());
+            formal_parameters.push(logic.mkVar(rsort, ss.str().c_str()));
+        }
+        PTRef tail = logic.getDefaultValuePTRef(rsort);
+        for (int rowIdx : rowpair->data) {
+            vec<PTRef> row_eqs;
+            const vec<PTRef> &argvals = truthTable[rowIdx].argvals;
+            for (int i = 0; i < argvals.size(); i++) {
+                row_eqs.push(logic.mkEq(argvals[i], formal_parameters[i]));
+            }
+            PTRef cond_t = logic.mkAnd(row_eqs);
+            PTRef then_t = truthTable[rowIdx].retval;
+            tail = logic.mkIte(cond_t, then_t, tail);
+        }
+        std::cout << "(define-fun " << sym << " (";
+        for (int i = 0; i < formal_parameters.size(); i++) {
+            std::cout << logic.pp(formal_parameters[i]) << (i == formal_parameters.size()-1 ? "" : " ");
+        }
+        std::cout << ") ";
+        std::cout << logic.pp(tail) << ")" << std::endl;
+    }
+
+    for (const auto &row : truthTable) {
+        for (auto asgn : row.argvals) {
+            std::cout << logic.pp(asgn) << " ";
+        }
+        std::cout << " -> " << logic.pp(row.retval) << std::endl;
     }
 }
 

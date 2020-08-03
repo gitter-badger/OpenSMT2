@@ -64,6 +64,8 @@ const char* Logic::s_sort_bool = "Bool";
 const char* Logic::s_ite_prefix = ".oite";
 const char* Logic::s_framev_prefix = ".frame";
 
+const char* Logic::s_any_prefix = "@a";
+
 // The constructor initiates the base logic (Boolean)
 Logic::Logic() :
       distinctClassCount(0)
@@ -490,6 +492,10 @@ bool Logic::declare_sort_hook(SRef sr) {
     ites.insert(tr, true);
     sortToIte.insert(sr, tr);
 
+    // Default universe element
+    std::stringstream ss;
+    ss << s_any_prefix << "!!" << this->getSortName(sr) << "!";
+    defaultValueForSort.insert(sr, this->mkVar(sr, ss.str().c_str()));
     return true;
 }
 
@@ -668,7 +674,7 @@ Logic::getDefaultValue(const PTRef tr) const
 PTRef
 Logic::getDefaultValuePTRef(const SRef sref) const {
     if (sref == sort_BOOL) { return term_TRUE; }
-    throw "default values not implemented yet for uninterpreted sorts\n";
+    else { return defaultValueForSort[sref]; }
 }
 
 PTRef
