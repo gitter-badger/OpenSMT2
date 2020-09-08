@@ -58,7 +58,7 @@ class Logic {
 
         ~TFun() { free(name); }
 
-        TFun &operator=(TFun &other) {
+        TFun& operator=(TFun &other) {
             if (&other != this) {
                 free(name);
                 ret_sort = other.ret_sort;
@@ -70,6 +70,17 @@ class Logic {
             return *this;
         }
 
+        TFun& operator= (const TFun& other) {
+            if (&other != this) {
+                free(name);
+                ret_sort = other.ret_sort;
+                tr_body = other.tr_body;
+                name = (char*)malloc(strlen(other.name)+1);
+                strcpy(name, other.name);
+                other.args.copyTo(args);
+            }
+            return *this;
+        }
         const char *getName() const { return name; }
 
         SRef getRetSort() const { return ret_sort; }
@@ -187,7 +198,6 @@ class Logic {
 
 
     static const char*  s_sort_bool;
-    static const char*  s_ite_prefix;
     static const char*  s_framev_prefix;
 
     Logic();

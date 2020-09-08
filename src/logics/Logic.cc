@@ -61,10 +61,7 @@ const char* Logic::tk_distinct = "distinct";
 const char* Logic::tk_ite      = "ite";
 
 const char* Logic::s_sort_bool = "Bool";
-const char* Logic::s_ite_prefix = ".oite";
 const char* Logic::s_framev_prefix = ".frame";
-
-const char* Logic::s_any_prefix = "@a";
 
 // The constructor initiates the base logic (Boolean)
 Logic::Logic() :
@@ -492,10 +489,6 @@ bool Logic::declare_sort_hook(SRef sr) {
     ites.insert(tr, true);
     sortToIte.insert(sr, tr);
 
-    // Default universe element
-    std::stringstream ss;
-    ss << s_any_prefix << "!!" << this->getSortName(sr) << "!";
-    defaultValueForSort.insert(sr, this->mkVar(sr, ss.str().c_str()));
     return true;
 }
 

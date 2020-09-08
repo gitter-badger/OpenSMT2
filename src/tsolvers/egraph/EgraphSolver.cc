@@ -255,7 +255,6 @@ void Egraph::computeModel( )
     for (ERef er : enode_store.getTermEnodes()) {
         const Enode &e = enode_store[er];
         ERef root_r = e.getRoot();
-        const Enode &r = enode_store[root_r];
         if (canonERefsForValues.has(er))
             continue;
         canonERefsForValues.insert(er, root_r);
