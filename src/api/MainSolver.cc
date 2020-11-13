@@ -379,18 +379,21 @@ sstat MainSolver::check()
     initialize();
     sstat rval = simplifyFormulas();
 
-    if (config.dump_query())
-        printFramesAsQuery();
-
-    if (rval == s_Undef) {
-        rval = solve();
-        if (rval == s_False) {
-            assert(not smt_solver->isOK());
-            rememberUnsatFrame(smt_solver->getConflictFrame());
-        }
-    }
-
-    return rval;
+    logic.printStatistic(std::cout, root_instance.getRoot());
+    return s_Undef;
+//
+//    if (config.dump_query())
+//        printFramesAsQuery();
+//
+//    if (rval == s_Undef) {
+//        rval = solve();
+//        if (rval == s_False) {
+//            assert(not smt_solver->isOK());
+//            rememberUnsatFrame(smt_solver->getConflictFrame());
+//        }
+//    }
+//
+//    return rval;
 }
 
 sstat MainSolver::solve()

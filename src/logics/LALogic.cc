@@ -1031,3 +1031,45 @@ void SimplifyConstDiv::Op(opensmt::Number& s, const opensmt::Number& v) const { 
 opensmt::Number SimplifyConstDiv::getIdOp() const { return 1; }
 
 
+void LALogic::printStatistic(std::ostream &o, PTRef root) const {
+    vec<PTRef> queue;
+    Map<PTRef, bool, PTRefHash> processed;
+
+    int n_diff_eqs = 0;
+    int n_lin_eqs = 0;
+    queue.push(root);
+
+    while (queue.size() != 0) {
+        PTRef tr = queue.last();
+
+        if (processed.has(tr)) {
+            queue.pop();
+            continue;
+        }
+
+        bool unprocessed_children = false;
+        for (auto c : getPterm(tr)) {
+            if (not processed.has(c)) {
+                queue.push(c);
+                unprocessed_children = true;
+            }
+        }
+        if (unprocessed_children) {
+            continue;
+        }
+
+        // all children processed
+        queue.pop();
+        processed.insert(tr, true);
+        if (isNumLeq(tr)) {
+            PTRef linterm = getPterm(tr)[1];
+            if (getPterm(linterm).size() <= 2) {
+                // either v, (* k v), or (+ t1 t2) where t1 and t2 are linear terms
+                n_diff_eqs++;
+            }
+            n_lin_eqs++;
+        }
+    }
+    o << "; Number of difference inequalities: " << n_diff_eqs << endl;
+    o << "; Number of all inequalities: " << n_lin_eqs << endl;
+}

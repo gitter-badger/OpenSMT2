@@ -249,3 +249,4 @@ PTRef LIALogic::sumToNormalizedInequality(PTRef sum) {
     constantValue = constantValue.ceil();
     return mkFun(get_sym_Num_LEQ(), {mkConst(constantValue), normalizedSum});
 }
+

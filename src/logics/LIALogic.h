@@ -102,6 +102,7 @@ public:
     virtual const SRef get_sort_NUM () const override;
 
     virtual PTRef sumToNormalizedInequality(PTRef sum) override;
+
 };
 
 #endif
