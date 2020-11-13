@@ -1030,12 +1030,30 @@ opensmt::Number SimplifyConstTimes::getIdOp() const { return 1; }
 void SimplifyConstDiv::Op(opensmt::Number& s, const opensmt::Number& v) const { if (v == 0) { printf("explicit div by zero\n"); } s /= v; }
 opensmt::Number SimplifyConstDiv::getIdOp() const { return 1; }
 
+int LALogic::countTerms(PTRef linterm) const {
+    assert(isNumVar(linterm) or isNumTimes(linterm) or isNumPlus(linterm));
+
+    const Pterm &t = getPterm(linterm);
+
+    if (isNumVar(linterm)) {
+        return 1;
+    } else if (isNumTimes(linterm)) {
+        assert(t.size() == 2);
+        return 1;
+    } else {
+        assert(isNumPlus(linterm));
+        assert(t.size() >= 2);
+        return t.size();
+    }
+}
 
 void LALogic::printStatistic(std::ostream &o, PTRef root) const {
     vec<PTRef> queue;
     Map<PTRef, bool, PTRefHash> processed;
 
     int n_diff_eqs = 0;
+    int n_unary = 0;
+    int n_binary = 0;
     int n_lin_eqs = 0;
     queue.push(root);
 
@@ -1065,11 +1083,21 @@ void LALogic::printStatistic(std::ostream &o, PTRef root) const {
             PTRef linterm = getPterm(tr)[1];
             if (getPterm(linterm).size() <= 2) {
                 // either v, (* k v), or (+ t1 t2) where t1 and t2 are linear terms
+                int n_terms = countTerms(linterm);
+                assert(n_terms > 0);
+                if (n_terms == 1) {
+                    n_unary++;
+                } else {
+                    assert(n_terms == 2);
+                    n_binary++;
+                }
                 n_diff_eqs++;
             }
             n_lin_eqs++;
         }
     }
     o << "; Number of difference inequalities: " << n_diff_eqs << endl;
+    o << "; Number of unary inequalities: " << n_unary << endl;
+    o << "; Number of binary inequalities: " << n_binary << endl;
     o << "; Number of all inequalities: " << n_lin_eqs << endl;
 }

@@ -46,6 +46,8 @@ protected:
     static const char*  s_sort_num;
 
     Map<PTRef,bool,PTRefHash> la_split_inequalities;
+
+    int countTerms(PTRef linterm) const;
 public:
     LALogic();
     ~LALogic() { for(int i = 0; i < numbers.size(); ++i) {delete numbers[i];}}
