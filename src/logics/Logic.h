@@ -443,7 +443,7 @@ class Logic {
     int subst_num; // Number of substitutions
 
     void collectStats(PTRef, int& n_of_conn, int& n_of_eq, int& n_of_uf, int& n_of_if);
-    virtual void printStatistic(std::ostream& o, PTRef root) const { }
+    virtual void printStatistic(std::ostream& o, PTRef root) { }
 
     inline int     verbose                       ( ) const;// { return config.verbosity(); }
 };

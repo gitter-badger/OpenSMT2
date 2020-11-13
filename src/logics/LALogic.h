@@ -48,6 +48,7 @@ protected:
     Map<PTRef,bool,PTRefHash> la_split_inequalities;
 
     int countTerms(PTRef linterm) const;
+    bool isDiffTerm(PTRef linterm); // Can't be const because we need to construct negation of a constant in the check
 public:
     LALogic();
     ~LALogic() { for(int i = 0; i < numbers.size(); ++i) {delete numbers[i];}}
@@ -154,6 +155,8 @@ public:
     virtual bool isLinearTerm(PTRef tr) const;
     virtual bool isLinearFactor(PTRef tr) const;
     virtual void splitTermToVarAndConst(const PTRef &term, PTRef &var, PTRef &fac) const;
+    virtual std::pair<PTRef,PTRef> splitTermToVarAndConst(const PTRef term) const;
+    virtual PTRef getConsFromTerm(PTRef term) const;
     virtual PTRef normalizeSum(PTRef sum);
     virtual PTRef normalizeMul(PTRef mul);
     // Given a sum term 't' returns a normalized inequality 'c <= s' equivalent to '0 <= t'
@@ -173,16 +176,18 @@ public:
     // Helper methods
 
     // Given an inequality 'c <= t', return the constant c; checked version
-    PTRef getConstantFromLeq(PTRef);
+    PTRef getConstantFromLeq(PTRef) const;
     // Given an inequality 'c <= t', return the term t; checked version
-    PTRef getTermFromLeq(PTRef);
+    PTRef getTermFromLeq(PTRef) const;
     // Given an inequality 'c <= t', return the pair <c,t> for a constant c and term t; unchecked version, for internal use
     std::pair<PTRef, PTRef> leqToConstantAndTerm(PTRef);
+    // Given a term a*x, return the constant c
+    PTRef getConstantFromTerm(PTRef tr) const { return getPterm(tr)[0]; }
 
     // MB: In pure LA, there are never nested boolean terms
     vec<PTRef> getNestedBoolRoots (PTRef)  const override { return vec<PTRef>(); }
 
-    void printStatistic(std::ostream &o, PTRef root) const override;
+    void printStatistic(std::ostream &o, PTRef root) override;
 
 };
 

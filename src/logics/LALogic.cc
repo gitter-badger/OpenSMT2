@@ -62,6 +62,21 @@ LALogic::getNumConst(PTRef tr) const
     return *numbers[id];
 }
 
+std::pair<PTRef,PTRef> LALogic::splitTermToVarAndConst(PTRef tr) const {
+    PTRef var, fac;
+    splitTermToVarAndConst(tr, var, fac);
+    return {var,fac};
+}
+
+PTRef LALogic::getConsFromTerm(PTRef tr) const {
+    PTRef cons_tr = splitTermToVarAndConst(tr).second;
+    if (cons_tr == PTRef_Undef) {
+        return getTerm_NumOne();
+    } else {
+        return cons_tr;
+    }
+}
+
 void LALogic::splitTermToVarAndConst(const PTRef& term, PTRef& var, PTRef& fac) const
 {
     assert(isNumTimes(term) || isNumDiv(term) || isNumVarOrIte(term) || isConstant(term) || isUF(term));
@@ -1001,7 +1016,7 @@ PTRef LALogic::sumToNormalizedInequality(PTRef sum) {
     return insertTermHash(get_sym_Num_LEQ(), {mkConst(constantVal), normalizedSum});
 }
 
-PTRef LALogic::getConstantFromLeq(PTRef leq) {
+PTRef LALogic::getConstantFromLeq(PTRef leq) const {
     Pterm const & term = getPterm(leq);
     if (not isNumLeq(term.symb())) {
         throw OsmtApiException("LALogic::getConstantFromLeq called on a term that is not less-or-equal inequality");
@@ -1009,7 +1024,7 @@ PTRef LALogic::getConstantFromLeq(PTRef leq) {
     return term[0];
 }
 
-PTRef LALogic::getTermFromLeq(PTRef leq) {
+PTRef LALogic::getTermFromLeq(PTRef leq) const {
     Pterm const & term = getPterm(leq);
     if (not isNumLeq(term.symb())) {
         throw OsmtApiException("LALogic::getConstantFromLeq called on a term that is not less-or-equal inequality");
@@ -1047,11 +1062,24 @@ int LALogic::countTerms(PTRef linterm) const {
     }
 }
 
-void LALogic::printStatistic(std::ostream &o, PTRef root) const {
+bool LALogic::isDiffTerm(PTRef linterm) {
+    const Pterm& t = getPterm(linterm);
+    if (isNumPlus(linterm) and t.size() == 2) {
+        PTRef cons1 = getConsFromTerm(t[0]);
+        PTRef cons2 = getConsFromTerm(t[1]);
+        if (cons1 == mkNumNeg(cons2)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void LALogic::printStatistic(std::ostream &o, PTRef root) {
     vec<PTRef> queue;
     Map<PTRef, bool, PTRefHash> processed;
 
     int n_diff_eqs = 0;
+    int n_at_most_binary = 0;
     int n_unary = 0;
     int n_binary = 0;
     int n_lin_eqs = 0;
@@ -1080,7 +1108,7 @@ void LALogic::printStatistic(std::ostream &o, PTRef root) const {
         queue.pop();
         processed.insert(tr, true);
         if (isNumLeq(tr)) {
-            PTRef linterm = getPterm(tr)[1];
+            PTRef linterm = getTermFromLeq(tr);
             if (getPterm(linterm).size() <= 2) {
                 // either v, (* k v), or (+ t1 t2) where t1 and t2 are linear terms
                 int n_terms = countTerms(linterm);
@@ -1090,13 +1118,17 @@ void LALogic::printStatistic(std::ostream &o, PTRef root) const {
                 } else {
                     assert(n_terms == 2);
                     n_binary++;
+                    if (isDiffTerm(linterm)) {
+                        n_diff_eqs ++;
+                    }
                 }
-                n_diff_eqs++;
+                n_at_most_binary++;
             }
             n_lin_eqs++;
         }
     }
     o << "; Number of difference inequalities: " << n_diff_eqs << endl;
+    o << "; Number of at most binary inequalities: " << n_at_most_binary << endl;
     o << "; Number of unary inequalities: " << n_unary << endl;
     o << "; Number of binary inequalities: " << n_binary << endl;
     o << "; Number of all inequalities: " << n_lin_eqs << endl;
